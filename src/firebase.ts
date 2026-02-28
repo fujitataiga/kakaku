@@ -8,26 +8,47 @@ let db: Firestore | null = null;
 let auth: Auth | null = null;
 let storage: FirebaseStorage | null = null;
 
-const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID,
-  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
-};
-console.log("🔥 FIREBASE ENV CHECK", {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-});
+let dynamicConfig: any = null;
+
+export async function initFirebase() {
+  if (app) return;
+  
+  try {
+    const response = await fetch('/api/config');
+    const config = await response.json();
+    dynamicConfig = config.firebase;
+    
+    if (!dynamicConfig.apiKey) {
+      console.error("Firebase config is empty from server");
+      return;
+    }
+    
+    app = initializeApp(dynamicConfig);
+    console.log("🔥 Firebase initialized with server-side config");
+  } catch (err) {
+    console.error("Failed to fetch firebase config:", err);
+  }
+}
 
 function getFirebaseApp() {
-  if (!firebaseConfig.apiKey) {
-    throw new Error("データベース（Firebase）の設定が完了していません。Vercelの環境変数にVITE_FIREBASE_API_KEYなどを設定してください。");
-  }
   if (!app) {
-    app = initializeApp(firebaseConfig);
+    // フォールバック: 環境変数があればそれを使う
+    const fallbackConfig = {
+      apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+      authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+      projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+      storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+      messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+      appId: import.meta.env.VITE_FIREBASE_APP_ID,
+      measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
+    };
+    
+    if (fallbackConfig.apiKey) {
+      app = initializeApp(fallbackConfig);
+      return app;
+    }
+    
+    throw new Error("データベースの設定が読み込めていません。ページを再読み込みするか、環境変数を確認してください。");
   }
   return app;
 }

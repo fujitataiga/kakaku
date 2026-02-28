@@ -20,7 +20,7 @@ import {
   X
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { getAuthInstance } from './firebase';
+import { getAuthInstance, initFirebase } from './firebase';
 import { signInAnonymously, onAuthStateChanged, User } from 'firebase/auth';
 import { geminiService } from './services/gemini';
 import { dbService, Entry } from './services/dbService';
@@ -82,8 +82,14 @@ export default function App() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    // サーバー側のAPIが生きているか、またはデプロイ済みならAI準備完了とする
-    setIsAiReady(true);
+    const setup = async () => {
+      // 1. Firebaseの設定をサーバーから取得して初期化
+      await initFirebase();
+      
+      // 2. AIの準備状態を確認
+      setIsAiReady(true);
+    };
+    setup();
   }, []);
 
   useEffect(() => {
