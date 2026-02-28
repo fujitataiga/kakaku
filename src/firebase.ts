@@ -18,15 +18,24 @@ export async function initFirebase() {
     const config = await response.json();
     dynamicConfig = config.firebase;
     
-    if (!dynamicConfig.apiKey) {
-      console.error("Firebase config is empty from server");
-      return;
+    const requiredKeys = ['apiKey', 'projectId', 'authDomain'];
+    const missingKeys = requiredKeys.filter(key => !dynamicConfig[key]);
+    
+    if (missingKeys.length > 0) {
+      const mappedKeys = missingKeys.map(k => {
+        if (k === 'apiKey') return 'FIREBASE_API_KEY';
+        if (k === 'projectId') return 'FIREBASE_PROJECT_ID';
+        if (k === 'authDomain') return 'FIREBASE_AUTH_DOMAIN';
+        return k;
+      });
+      throw new Error(`Firebaseの設定が不足しています: ${mappedKeys.join(', ')} をSecretsパネルで設定してください。`);
     }
     
     app = initializeApp(dynamicConfig);
     console.log("🔥 Firebase initialized with server-side config");
-  } catch (err) {
+  } catch (err: any) {
     console.error("Failed to fetch firebase config:", err);
+    throw err; // App.tsx の setup でキャッチさせる
   }
 }
 

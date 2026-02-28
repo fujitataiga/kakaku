@@ -82,14 +82,59 @@ export default function App() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
+    let unsubscribe: (() => void) | undefined;
     const setup = async () => {
-      // 1. Firebaseの設定をサーバーから取得して初期化
-      await initFirebase();
-      
-      // 2. AIの準備状態を確認
-      setIsAiReady(true);
+      try {
+        // 1. Firebaseの設定をサーバーから取得して初期化
+        await initFirebase();
+        
+        // 2. 認証の初期化
+        const auth = getAuthInstance();
+        unsubscribe = onAuthStateChanged(auth, (u) => setUser(u));
+        
+        // 匿名認証
+        await signInAnonymously(auth).catch((err: any) => {
+          console.error("Auth error:", err);
+          if (err.code === 'auth/configuration-not-found') {
+            setError("Firebaseコンソールで「匿名認証」を有効にする必要があります。Authentication > Sign-in method から有効にしてください。");
+          }
+        });
+
+        // 3. データの取得
+        fetchRecent();
+        fetchStores();
+
+        // 4. 位置情報の取得
+        if ("geolocation" in navigator) {
+          navigator.geolocation.getCurrentPosition(
+            (position) => {
+              setUserCoords({
+                lat: position.coords.latitude,
+                lng: position.coords.longitude
+              });
+            },
+            (err) => console.warn("Geolocation error:", err),
+            { enableHighAccuracy: false, timeout: 5000, maximumAge: 600000 }
+          );
+        }
+
+        // 5. AIの準備状態を確認
+        setIsAiReady(true);
+
+        // モバイルブラウザのヒント表示
+        const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+        const isStandalone = (window.navigator as any).standalone || window.matchMedia('(display-mode: standalone)').matches;
+        if (isMobile && !isStandalone) {
+          setShowMobileTip(true);
+        }
+      } catch (err: any) {
+        console.error("Setup error:", err);
+        setError(err.message || "初期化に失敗しました。設定を確認してください。");
+      }
     };
+
     setup();
+    return () => unsubscribe?.();
   }, []);
 
   useEffect(() => {
@@ -112,50 +157,6 @@ export default function App() {
     }
     return () => clearInterval(interval);
   }, [uploadStep]);
-  useEffect(() => {
-    // Check if on mobile and not in standalone mode
-    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-    const isStandalone = (window.navigator as any).standalone || window.matchMedia('(display-mode: standalone)').matches;
-    if (isMobile && !isStandalone) {
-      setShowMobileTip(true);
-    }
-
-    try {
-      const auth = getAuthInstance();
-      signInAnonymously(auth).catch((err: any) => {
-        console.error(err);
-        if (err.code === 'auth/configuration-not-found') {
-          setError("Firebaseコンソールで「匿名認証」を有効にする必要があります。Authentication > Sign-in method から有効にしてください。");
-        } else {
-          setError("Firebase認証に失敗しました。設定を確認してください。");
-        }
-      });
-      const unsubscribe = onAuthStateChanged(auth, (u) => setUser(u));
-      
-      // Fetch recent entries
-      fetchRecent();
-      fetchStores();
-
-      // Get user location for biasing search
-      if ("geolocation" in navigator) {
-        navigator.geolocation.getCurrentPosition(
-          (position) => {
-            setUserCoords({
-              lat: position.coords.latitude,
-              lng: position.coords.longitude
-            });
-          },
-          (err) => console.warn("Geolocation error:", err),
-          { enableHighAccuracy: false, timeout: 5000, maximumAge: 600000 }
-        );
-      }
-      
-      return () => unsubscribe();
-    } catch (err: any) {
-      console.error(err);
-      setError(err.message || "Firebaseの初期化に失敗しました。");
-    }
-  }, []);
 
   const fetchRecent = async () => {
     try {
@@ -176,18 +177,35 @@ export default function App() {
   };
 
   if (error) {
+    const isConfigError = error.includes("設定") || error.includes("API Key") || error.includes("Firebase");
+    
     return (
       <div className="min-h-screen bg-[#F5F5F0] flex items-center justify-center p-4">
         <div className="bg-white p-8 rounded-3xl shadow-xl max-w-md w-full text-center space-y-4">
           <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto">
-            <CheckCircle2 className="w-8 h-8 text-red-500 rotate-45" />
+            <X className="w-8 h-8 text-red-500" />
           </div>
-          <h2 className="text-xl font-bold text-red-600">設定が必要です</h2>
+          <h2 className="text-xl font-bold text-red-600">エラーが発生しました</h2>
           <p className="text-gray-600 text-sm leading-relaxed">
             {error}
-            <br /><br />
-            AI Studioの「Secrets」パネルでFirebaseの環境変数を設定してください。
           </p>
+          {isConfigError && (
+            <div className="mt-6 p-4 bg-amber-50 rounded-2xl text-left border border-amber-100">
+              <p className="text-amber-800 text-xs font-bold mb-2 uppercase tracking-wider">解決方法</p>
+              <p className="text-amber-700 text-xs leading-relaxed">
+                AI Studioの「Secrets」パネルで、以下の変数が正しく設定されているか確認してください：
+                <br />
+                <code className="bg-white/50 px-1 rounded">FIREBASE_API_KEY</code>, 
+                <code className="bg-white/50 px-1 rounded">FIREBASE_PROJECT_ID</code> など
+              </p>
+            </div>
+          )}
+          <button 
+            onClick={() => window.location.reload()}
+            className="w-full py-3 bg-gray-900 text-white rounded-2xl font-bold hover:bg-gray-800 transition-colors"
+          >
+            再読み込み
+          </button>
         </div>
       </div>
     );
