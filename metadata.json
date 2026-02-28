@@ -1,0 +1,8 @@
+{
+  "name": "カカク",
+  "description": "日本のスーパーのレシートを読み取り、価格を共有するPWAアプリ",
+  "requestFramePermissions": [
+    "camera",
+    "geolocation"
+  ]
+}
