@@ -51,27 +51,26 @@ const NORMALIZATION_PROMPT = `
 }
 `;
 
+let globalApiKey: string | null = null;
+
+export function setGeminiApiKey(key: string) {
+  globalApiKey = key;
+}
+
 export const geminiService = {
   async extractRawItems(imageDataBase64: string, retryCount = 0): Promise<any> {
-    // 1. まずサーバー側の環境変数 (Vercel等で設定) を確認
-    // 2. なければ AI Studio のユーザー選択キーを確認
-    const apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY;
+    const apiKey = globalApiKey || process.env.GEMINI_API_KEY || process.env.API_KEY;
     
     // AI Studio のプレースホルダー文字列をチェック
     const isPlaceholder = !apiKey || apiKey === "AI Studio Free Tier" || apiKey.includes("YOUR_API_KEY");
 
     if (isPlaceholder) {
-      // 本番環境（デプロイ後）でキーがない場合は致命的
-      if (process.env.NODE_ENV === "production") {
-        throw new Error("システム設定エラー: APIキーが設定されていません。管理者に連絡してください。");
-      }
-      // AI Studio プレビュー環境の場合は、ユーザーに選択を促す
       throw new Error("AUTH_REQUIRED: AI機能を有効化してください。");
     }
 
     console.log(`[Gemini] Starting extraction (attempt ${retryCount + 1})...`);
     const ai = new GoogleGenAI({ apiKey });
-    const model = "gemini-1.5-flash"; 
+    const model = "gemini-3-flash-preview"; 
 
     try {
       const response = await ai.models.generateContent({
@@ -124,11 +123,11 @@ export const geminiService = {
   async normalizeItems(rawItems: any[], storeContext: { storeName?: string; region?: string }, retryCount = 0): Promise<any> {
     if (!rawItems || rawItems.length === 0) return { normalizedItems: [] };
 
-    const apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY;
+    const apiKey = globalApiKey || process.env.GEMINI_API_KEY || process.env.API_KEY;
     if (!apiKey || apiKey === "AI Studio Free Tier") return { normalizedItems: [] };
 
     const ai = new GoogleGenAI({ apiKey });
-    const model = "gemini-1.5-flash";
+    const model = "gemini-3-flash-preview";
 
     const prompt = NORMALIZATION_PROMPT
       .replace("{{storeName}}", storeContext.storeName || "不明")

@@ -22,7 +22,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { getAuthInstance, initFirebase } from './firebase';
 import { signInAnonymously, onAuthStateChanged, User } from 'firebase/auth';
-import { geminiService } from './services/gemini';
+import { geminiService, setGeminiApiKey } from './services/gemini';
 import { dbService, Entry } from './services/dbService';
 import { storageService } from './services/storageService';
 import { clsx, type ClassValue } from 'clsx';
@@ -92,6 +92,10 @@ export default function App() {
         
         if (config.googleMapsApiKey) {
           setGoogleMapsKey(config.googleMapsApiKey);
+        }
+        
+        if (config.geminiApiKey) {
+          setGeminiApiKey(config.geminiApiKey);
         }
 
         await initFirebase();
@@ -212,10 +216,15 @@ export default function App() {
             <div className="mt-6 p-4 bg-amber-50 rounded-2xl text-left border border-amber-100">
               <p className="text-amber-800 text-xs font-bold mb-2 uppercase tracking-wider">解決方法</p>
               <p className="text-amber-700 text-xs leading-relaxed">
-                AI Studioの「Secrets」パネルで、以下の変数が正しく設定されているか確認してください：
+                {window.location.hostname.includes('vercel.app') ? (
+                  <>Vercelのダッシュボード（Settings &gt; Environment Variables）で、以下の変数が正しく設定されているか確認してください：</>
+                ) : (
+                  <>AI Studioの「Secrets」パネルで、以下の変数が正しく設定されているか確認してください：</>
+                )}
                 <br />
                 <code className="bg-white/50 px-1 rounded">FIREBASE_API_KEY</code>, 
-                <code className="bg-white/50 px-1 rounded">FIREBASE_PROJECT_ID</code> など
+                <code className="bg-white/50 px-1 rounded">FIREBASE_PROJECT_ID</code>,
+                <code className="bg-white/50 px-1 rounded">GEMINI_API_KEY</code> など
               </p>
             </div>
           )}
@@ -345,19 +354,12 @@ export default function App() {
         try {
           const base64 = (reader.result as string).split(',')[1];
           
-          // AI解析をスタート (サーバー側のAPIを呼ぶ)
-          const response = await fetch('/api/extract', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ image: base64 })
-          });
-
-          if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.error || "解析に失敗しました。");
+          // AI解析をスタート (フロントエンドのGemini APIを直接呼ぶ)
+          const rawResult = await geminiService.extractRawItems(base64);
+          
+          if (!rawResult.items || rawResult.items.length === 0) {
+            throw new Error("レシートから商品を読み取れませんでした。");
           }
-
-          const rawResult = await response.json();
           
           if (!rawResult.items || rawResult.items.length === 0) {
             throw new Error("レシートから商品を読み取れませんでした。");

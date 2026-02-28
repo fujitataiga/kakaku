@@ -5,101 +5,42 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
-async function startServer() {
-  const app = express();
-  const PORT = 3000;
+const app = express();
+const PORT = 3000;
 
-  app.use(express.json({ limit: '10mb' }));
+app.use(express.json({ limit: '10mb' }));
 
-  // 設定取得用のAPIエンドポイント
-  app.get("/api/config", (req, res) => {
-    const getEnv = (key: string) => process.env[key] || process.env[`VITE_${key}`] || "";
-    
-    res.json({
-      firebase: {
-        apiKey: getEnv('FIREBASE_API_KEY'),
-        authDomain: getEnv('FIREBASE_AUTH_DOMAIN'),
-        projectId: getEnv('FIREBASE_PROJECT_ID'),
-        storageBucket: getEnv('FIREBASE_STORAGE_BUCKET'),
-        messagingSenderId: getEnv('FIREBASE_MESSAGING_SENDER_ID'),
-        appId: getEnv('FIREBASE_APP_ID'),
-        measurementId: getEnv('FIREBASE_MEASUREMENT_ID'),
-      },
-      googleMapsApiKey: getEnv('GOOGLE_MAPS_API_KEY'),
-      isProduction: process.env.NODE_ENV === "production"
-    });
+// 設定取得用のAPIエンドポイント
+app.get("/api/config", (req, res) => {
+  const getEnv = (key: string) => process.env[key] || process.env[`VITE_${key}`] || "";
+  
+  res.json({
+    firebase: {
+      apiKey: getEnv('FIREBASE_API_KEY'),
+      authDomain: getEnv('FIREBASE_AUTH_DOMAIN'),
+      projectId: getEnv('FIREBASE_PROJECT_ID'),
+      storageBucket: getEnv('FIREBASE_STORAGE_BUCKET'),
+      messagingSenderId: getEnv('FIREBASE_MESSAGING_SENDER_ID'),
+      appId: getEnv('FIREBASE_APP_ID'),
+      measurementId: getEnv('FIREBASE_MEASUREMENT_ID'),
+    },
+    googleMapsApiKey: getEnv('GOOGLE_MAPS_API_KEY'),
+    geminiApiKey: getEnv('GEMINI_API_KEY') || process.env.API_KEY || "",
+    isProduction: process.env.NODE_ENV === "production"
   });
+});
 
-  // AI解析用のAPIエンドポイント
-  app.post("/api/extract", async (req, res) => {
-    try {
-      const { image } = req.body;
-      // 1. システム設定のキー (Vercel等)
-      // 2. ユーザー選択のキー (AI Studio)
-      const apiKey = process.env.GEMINI_API_KEY || process.env.API_KEY;
+// AI解析用のAPIエンドポイント (Gemini APIはフロントエンドから呼ぶのが原則だが、
+// 抽出は画像データが大きいため、一時的にサーバーサイドで実装していた。
+// ガイドラインに従い、フロントエンド実装を優先するが、
+// このエンドポイントは予備として残すか、削除を検討する。
+// 今回はフロントエンド側に寄せ直すため、一旦シンプルにする。)
+app.post("/api/extract", async (req, res) => {
+  res.status(501).json({ error: "Please use frontend Gemini API implementation." });
+});
 
-      const isPlaceholder = !apiKey || apiKey === "AI Studio Free Tier" || apiKey.includes("YOUR_API_KEY");
-
-      if (isPlaceholder) {
-        return res.status(500).json({ 
-          error: "AUTH_REQUIRED: AI機能の有効化が必要です。画面のボタンから設定してください。" 
-        });
-      }
-
-      const ai = new GoogleGenAI({ apiKey });
-      const model = "gemini-1.5-flash";
-
-      const prompt = `
-あなたは日本のスーパーのレシート解析の専門家です。
-画像から、商品行を抽出し、以下のJSON形式で出力してください。
-商品名と思われる文字列と、価格と思われる数値を抽出してください。
-行全体のテキストも「rawLine」として残してください。
-
-【出力形式】
-{
-  "storeName": "店舗名（不明ならnull）",
-  "items": [
-    {
-      "rawLine": "行全体のテキスト",
-      "rawProductName": "抽出した商品名",
-      "rawPrice": 123,
-      "rawQty": "数量（あれば）"
-    }
-  ]
-}
-`;
-
-      const result = await ai.models.generateContent({
-        model,
-        contents: {
-          parts: [
-            { text: prompt },
-            {
-              inlineData: {
-                mimeType: "image/jpeg",
-                data: image,
-              },
-            },
-          ],
-        },
-        config: {
-          responseMimeType: "application/json",
-        },
-      });
-
-      const text = result.text;
-      // JSON部分だけを抽出（念のため）
-      const jsonMatch = text.match(/\{[\s\S]*\}/);
-      const jsonStr = jsonMatch ? jsonMatch[0] : text;
-      
-      res.json(JSON.parse(jsonStr));
-    } catch (error: any) {
-      console.error("Server AI Error:", error);
-      res.status(500).json({ error: error.message });
-    }
-  });
-
-  // Vite middleware for development
+// Vite middleware for development
+async function setupVite() {
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
       server: { middlewareMode: true },
@@ -112,10 +53,14 @@ async function startServer() {
       res.sendFile("dist/index.html", { root: "." });
     });
   }
+}
 
+setupVite();
+
+if (process.env.NODE_ENV !== "production") {
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on http://localhost:${PORT}`);
   });
 }
 
-startServer();
+export default app;

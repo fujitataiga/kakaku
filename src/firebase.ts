@@ -42,7 +42,7 @@ export async function initFirebase() {
         if (k === 'authDomain') return 'FIREBASE_AUTH_DOMAIN';
         return k;
       });
-      throw new Error(`Firebaseの設定が不足しています: ${mappedKeys.join(', ')} をSecretsパネルで設定してください。`);
+      throw new Error(`Firebaseの設定が不足しています: ${mappedKeys.join(', ')} を環境変数（またはSecretsパネル）で設定してください。`);
     }
     
     app = initializeApp(dynamicConfig);
