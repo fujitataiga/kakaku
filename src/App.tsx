@@ -82,25 +82,8 @@ export default function App() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    // APIキーが選択済みかチェック
-    const checkApiKey = async () => {
-      // サーバー側に本物のキーがあるかチェック
-      const serverKey = process.env.GEMINI_API_KEY;
-      const hasServerKey = serverKey && serverKey !== "AI Studio Free Tier" && !serverKey.includes("YOUR_API_KEY");
-
-      if (hasServerKey) {
-        setIsAiReady(true);
-        return;
-      }
-
-      if (typeof (window as any).aistudio?.hasSelectedApiKey === 'function') {
-        const hasKey = await (window as any).aistudio.hasSelectedApiKey();
-        setIsAiReady(hasKey);
-      } else {
-        setIsAiReady(true); // 開発環境など
-      }
-    };
-    checkApiKey();
+    // サーバー側のAPIが生きているか、またはデプロイ済みならAI準備完了とする
+    setIsAiReady(true);
   }, []);
 
   useEffect(() => {
@@ -270,6 +253,10 @@ export default function App() {
         setIsAiReady(true);
         setAuthError(false);
         setError(null);
+        // キー選択後は少し待ってから再試行を促す
+        alert("準備ができました。もう一度撮影してください。");
+      } else {
+        setError("本番環境の設定エラーです。Vercelの環境変数に GEMINI_API_KEY を設定してください。");
       }
     } catch (err) {
       console.error("Key selection failed:", err);
@@ -315,8 +302,19 @@ export default function App() {
         try {
           const base64 = (reader.result as string).split(',')[1];
           
-          // AI解析をスタート
-          const rawResult = await geminiService.extractRawItems(base64);
+          // AI解析をスタート (サーバー側のAPIを呼ぶ)
+          const response = await fetch('/api/extract', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ image: base64 })
+          });
+
+          if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || "解析に失敗しました。");
+          }
+
+          const rawResult = await response.json();
           
           if (!rawResult.items || rawResult.items.length === 0) {
             throw new Error("レシートから商品を読み取れませんでした。");
@@ -360,8 +358,9 @@ export default function App() {
           if (err.message?.includes("AUTH_REQUIRED")) {
             setAuthError(true);
             setIsAiReady(false);
+            setError("AI機能の有効化が必要です。下のボタンを押してください。");
           } else {
-            setError(`解析に失敗しました。もう一度試してみてください。`);
+            setError(`解析に失敗しました。通信環境を確認してもう一度試してみてください。`);
           }
           setUploadStep('idle');
         } finally {

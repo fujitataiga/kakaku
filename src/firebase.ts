@@ -24,7 +24,7 @@ console.log("🔥 FIREBASE ENV CHECK", {
 
 function getFirebaseApp() {
   if (!firebaseConfig.apiKey) {
-    throw new Error("Firebase API Key is missing. Please set VITE_FIREBASE_API_KEY in environment variables.");
+    throw new Error("データベース（Firebase）の設定が完了していません。Vercelの環境変数にVITE_FIREBASE_API_KEYなどを設定してください。");
   }
   if (!app) {
     app = initializeApp(firebaseConfig);
