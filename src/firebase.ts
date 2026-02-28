@@ -15,8 +15,22 @@ export async function initFirebase() {
   
   try {
     const response = await fetch('/api/config');
+    
+    if (!response.ok) {
+      throw new Error(`サーバー設定の取得に失敗しました (Status: ${response.status})。サーバーが起動中か確認してください。`);
+    }
+    
+    const contentType = response.headers.get("content-type");
+    if (!contentType || !contentType.includes("application/json")) {
+      throw new Error("サーバーから不正な形式のデータが返されました。ページを再読み込みしてください。");
+    }
+
     const config = await response.json();
     dynamicConfig = config.firebase;
+    
+    if (!dynamicConfig || typeof dynamicConfig !== 'object') {
+      throw new Error("Firebaseの設定データが壊れています。");
+    }
     
     const requiredKeys = ['apiKey', 'projectId', 'authDomain'];
     const missingKeys = requiredKeys.filter(key => !dynamicConfig[key]);

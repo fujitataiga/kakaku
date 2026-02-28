@@ -79,6 +79,7 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [authError, setAuthError] = useState(false);
   const [isAiReady, setIsAiReady] = useState<boolean | null>(null);
+  const [googleMapsKey, setGoogleMapsKey] = useState<string>("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -86,6 +87,13 @@ export default function App() {
     const setup = async () => {
       try {
         // 1. Firebaseの設定をサーバーから取得して初期化
+        const response = await fetch('/api/config');
+        const config = await response.json();
+        
+        if (config.googleMapsApiKey) {
+          setGoogleMapsKey(config.googleMapsApiKey);
+        }
+
         await initFirebase();
         
         // 2. 認証の初期化
@@ -175,6 +183,17 @@ export default function App() {
       console.error("Failed to fetch stores:", error);
     }
   };
+
+  if (isAiReady === null && !error) {
+    return (
+      <div className="min-h-screen bg-[#F5F5F0] flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <Loader2 className="w-10 h-10 animate-spin text-lime-600 mx-auto" />
+          <p className="text-gray-500 font-medium animate-pulse">アプリを起動しています...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (error) {
     const isConfigError = error.includes("設定") || error.includes("API Key") || error.includes("Firebase");
@@ -605,22 +624,32 @@ export default function App() {
 
                   <div className="space-y-1">
                     <label className="text-xs font-bold text-gray-400 uppercase">2. 市区町村</label>
-                    <Autocomplete
-                      apiKey={import.meta.env.VITE_GOOGLE_MAPS_API_KEY}
-                      onPlaceSelected={(place) => {
-                        // 都道府県名を除去して市区町村名だけを抽出
-                        let cityName = place.name || place.formatted_address?.split(' ')[0] || "";
-                        cityName = cityName.replace(userPrefecture, '');
-                        setUserCity(cityName);
-                      }}
-                      options={{
-                        types: ["(cities)"],
-                        componentRestrictions: { country: "jp" },
-                      }}
-                      className="w-full bg-gray-50 border border-black/5 rounded-xl p-3 focus:ring-2 focus:ring-lime-500/20 outline-none"
-                      placeholder={`${userPrefecture}内の市区町村を検索...`}
-                      defaultValue={userCity}
-                    />
+                    {googleMapsKey ? (
+                      <Autocomplete
+                        apiKey={googleMapsKey}
+                        onPlaceSelected={(place) => {
+                          // 都道府県名を除去して市区町村名だけを抽出
+                          let cityName = place.name || place.formatted_address?.split(' ')[0] || "";
+                          cityName = cityName.replace(userPrefecture, '');
+                          setUserCity(cityName);
+                        }}
+                        options={{
+                          types: ["(cities)"],
+                          componentRestrictions: { country: "jp" },
+                        }}
+                        className="w-full bg-gray-50 border border-black/5 rounded-xl p-3 focus:ring-2 focus:ring-lime-500/20 outline-none"
+                        placeholder={`${userPrefecture}内の市区町村を検索...`}
+                        defaultValue={userCity}
+                      />
+                    ) : (
+                      <input
+                        type="text"
+                        value={userCity}
+                        onChange={(e) => setUserCity(e.target.value)}
+                        placeholder="市区町村名を入力"
+                        className="w-full bg-gray-50 border border-black/5 rounded-xl p-3 focus:ring-2 focus:ring-lime-500/20 outline-none"
+                      />
+                    )}
                   </div>
                   
                   <div className="p-3 bg-lime-50 rounded-xl border border-lime-100">
@@ -854,21 +883,27 @@ export default function App() {
                       <p className="text-sm text-gray-500">Googleマップから店舗を検索して、アプリに登録します。</p>
                       <div className="space-y-2">
                         <label className="text-xs font-bold text-gray-400 uppercase">店舗を検索</label>
-                        <Autocomplete
-                          apiKey={import.meta.env.VITE_GOOGLE_MAPS_API_KEY}
-                          onPlaceSelected={handleRegisterStore}
-                          options={{
-                            types: ["establishment"],
-                            componentRestrictions: { country: "jp" },
-                            fields: ["name", "place_id", "formatted_address"],
-                            ...(userCoords ? {
-                              location: new google.maps.LatLng(userCoords.lat, userCoords.lng),
-                              radius: 5000,
-                            } : {})
-                          }}
-                          className="w-full bg-gray-50 border border-black/5 rounded-xl p-3 focus:ring-2 focus:ring-lime-500/20 outline-none"
-                          placeholder="スーパーの名前を入力..."
-                        />
+                        {googleMapsKey ? (
+                          <Autocomplete
+                            apiKey={googleMapsKey}
+                            onPlaceSelected={handleRegisterStore}
+                            options={{
+                              types: ["establishment"],
+                              componentRestrictions: { country: "jp" },
+                              fields: ["name", "place_id", "formatted_address"],
+                              ...(userCoords ? {
+                                location: new google.maps.LatLng(userCoords.lat, userCoords.lng),
+                                radius: 5000,
+                              } : {})
+                            }}
+                            className="w-full bg-gray-50 border border-black/5 rounded-xl p-3 focus:ring-2 focus:ring-lime-500/20 outline-none"
+                            placeholder="スーパーの名前を入力..."
+                          />
+                        ) : (
+                          <div className="p-4 bg-amber-50 rounded-xl border border-amber-100 text-amber-800 text-xs text-center">
+                            Google Maps APIキーが設定されていないため、店舗検索は利用できません。
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
